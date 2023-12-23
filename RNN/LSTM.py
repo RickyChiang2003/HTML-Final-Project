@@ -18,7 +18,7 @@ def kaggle_error(y_true, y_pred):
     ans /= float(len(y_true))
     return ans
 
-def compute_file_amount():
+def compute_file_amount(arrtest):
     totalfile = 0
     name1 = ""
     name2 = ""
@@ -30,7 +30,8 @@ def compute_file_amount():
             name1 = "5001" + str(subname) + ".npy"
             name2 = "5001" + str(subname) + "_label.npy"
         if(os.path.isfile(name1) == True) and (os.path.isfile(name2) == True):
-            totalfile += 1
+            if(need_file(arrtest, subname) == True):
+                totalfile += 1
     return totalfile
 
 def init_csvarr(csvarr, totalfile):
@@ -38,6 +39,29 @@ def init_csvarr(csvarr, totalfile):
         for j in range(8):
             for k in range(72):
                 csvarr[i][j][k] = 1
+
+def init_namearr(arrtest):
+    idx = 0
+    name1 = ""
+    name2 = ""
+    for subname in range(1001, 19092):  # for each station 1001, 19092
+        if subname < 10000:
+            name1 = "5001" + "0" + str(subname) + ".npy"
+            name2 = "5001" + "0" + str(subname) + "_label.npy"
+        else:
+            name1 = "5001" + str(subname) + ".npy"
+            name2 = "5001" + str(subname) + "_label.npy"
+        if(os.path.isfile(name1) == True) and (os.path.isfile(name2) == True):
+            if(need_file(arrtest, subname) == True):
+                namearr[idx] = subname
+                idx += 1
+
+def need_file(arrtest, subname):
+    for i in arrtest:
+        stest = str((int)(i-500100000))
+        if stest == str((int)(subname)):
+            return True
+    return False
 
 def init_x_y(arr1, arr2, len1, x,y):
     for i in range(len1):
@@ -99,14 +123,14 @@ def output_to_csv(arrtest, totalfile, namearr, csvarr):
 
 # main
 arrtest = np.loadtxt("sno_test_set.txt")
-totalfile = compute_file_amount()
-
+totalfile = compute_file_amount(arrtest)
 csvarr = np.zeros([totalfile, 8, 72])  # file amount: totalfile, Monday to Sunday: [1~7], 20minutes: min20
 namearr = np.zeros(totalfile)
 init_csvarr(csvarr, totalfile)
+init_namearr(arrtest)
 
 csvcnt = 0
-for subname in range(1001, 19092):  # for each station 1001, 19092
+for subname in range(1001, 1002):  # for each station 1001, 19092
     name1 = ""
     name2 = ""
     if subname < 10000:
@@ -116,11 +140,11 @@ for subname in range(1001, 19092):  # for each station 1001, 19092
         name1 = "5001" + str(subname) + ".npy"
         name2 = "5001" + str(subname) + "_label.npy"
     if (os.path.isfile(name1) and os.path.isfile(name2)) == False:
-        continue
+        if (need_file(arrtest, subname) == False):
+            continue
     print("exist subname = ",subname)
 
     # pre-process
-    namearr[csvcnt] = subname
     arr1 = np.load(name1)
     arr2 = np.load(name2)
     len1 = len(arr1) #56775 = 757 * 75
@@ -130,19 +154,21 @@ for subname in range(1001, 19092):  # for each station 1001, 19092
     init_x_y(arr1, arr2, len1, x,y)
     
     # Adding LSTM layer
-    n_steps = 75  # 
+    n_steps = 25
     n_features = 9
     model = Sequential()
-    model.add(LSTM(256,activation='relu',return_sequences=False,input_shape=(n_steps,n_features)))
-    model.add(Dense(1))
-    model.compile(optimizer='adam',loss=kaggle_error,metrics=[kaggle_error])
+    model.add(LSTM(256,activation='LeakyReLU',return_sequences=False,input_shape=(n_steps,n_features)))
+    model.add(Dense(100, activation="LeakyReLU"))
+    model.add(Dense(1, activation="linear"))
+    optimizer = tf.keras.optimizers.Adam(clipvalue=1.0)
+    model.compile(optimizer=optimizer,loss=kaggle_error,metrics=[kaggle_error])
     
     # train
     train_len = 12000
     x_train = np.zeros([train_len-n_steps,n_steps,n_features])
     y_train = np.zeros([train_len-n_steps])
     init_x_y_train(x_train, y_train, n_steps, train_len)
-    history = model.fit(x_train,y_train,batch_size=64,epochs=1) # can be change like 64,50
+    history = model.fit(x_train,y_train,batch_size=64,epochs=5) # can be change like 64,50
  
     # predict
     predict_x = np.zeros([504, n_steps, n_features])  # there are 504 20minutes in one week
@@ -175,6 +201,3 @@ for subname in range(1001, 19092):  # for each station 1001, 19092
 
 #testcsv
 output_to_csv(arrtest, totalfile, namearr, csvarr)
-
-
-
