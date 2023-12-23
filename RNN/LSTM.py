@@ -55,7 +55,7 @@ def init_x_y_train(x_train, y_train, n_steps, train_len):
             x_train[i-n_steps][j-i+n_steps] = x[j]
         y_train[i-n_steps] = y[i]
 
-def init_predict_x(predict_x):
+def init_predict_x(n_steps, predict_x):
     for i in range(1,8):
         for j in range(72):
             t_x = np.zeros(9)
@@ -150,20 +150,22 @@ for subname in range(1001, 19092):  # for each station 1001, 19092
     result = model.predict(predict_x)
     # re-predict if the result is a piace of shit
     repeat_time = 0
+
+    # if there is nan, then adjust result = 1
     for i in range(len(result)):
-        if result[i] > 1 or result[i] < 0:
-            history = model.fit(x_train,y_train,batch_size=64,epochs=1) # can be change like 64,50
-            result = model.predict(predict_x)
-            repeat_time += 1
-            i = 0
-        elif np.isnan(result[i]) or repeat_time >= 5:
+        if np.isnan(result[i]):
             for tmptmp in result:
                 tmptmp = 1
+            break
 
-    # store result
+    # store and adjust result
     id_r = 0
     for i in range(1,8):
         for j in range(72):
+            if result[id_r] > 1:
+                result[id_r] = 1
+            if result[id_r] < 0:
+                result[id_r] = 0
             csvarr[csvcnt][i][j] = arr1[2][2] * result[id_r]
             id_r += 1
     csvcnt += 1
@@ -173,7 +175,6 @@ for subname in range(1001, 19092):  # for each station 1001, 19092
 
 #testcsv
 output_to_csv(arrtest, totalfile, namearr, csvarr)
-
 
 
 
